@@ -13,7 +13,9 @@
     "build:electron": "tsc -p tsconfig.electron.json",
     "electron": "electron .",
     "electron:dev": "wait-on tcp:5173 && npm run build:electron && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .",
-    "start": "concurrently -k \"npm:dev\" \"npm:electron:dev\""
+    "start": "concurrently -k \"npm:dev\" \"npm:electron:dev\"",
+    "dist:win": "electron-builder --win --x64 --publish never --config.win.signAndEditExecutable=false",
+    "dist:win:root": "npm run build && npm run dist:win && powershell -NoProfile -Command \"$f=Get-ChildItem 'dist\\\\OGG Spectrum Player Setup *.exe' | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if($f){ Copy-Item $f.FullName -Destination (Join-Path (Get-Location) $f.Name) -Force; Write-Output ('copied: ' + $f.Name) } else { throw 'Setup exe not found.' }\""
   },
   "dependencies": {
     "react": "^19.1.1",
