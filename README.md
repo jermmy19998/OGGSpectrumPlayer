@@ -47,6 +47,14 @@ Desktop OGG player with a static spectrogram, draggable playhead, folder-based p
 `- vite.config.ts
 ```
 
+## Screenshot / 截图
+
+Loaded spectrogram view:
+
+已加载热力图界面：
+
+![Loaded Spectrogram](docs/heatmap-screenshot.png)
+
 ## Development / 开发运行
 
 ```bash
