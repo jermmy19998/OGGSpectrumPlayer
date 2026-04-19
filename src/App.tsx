@@ -53,6 +53,7 @@ function App() {
   const analysisTokenRef = useRef(0);
   const durationRef = useRef(0);
   const currentTimeRef = useRef(0);
+  const nMelsRef = useRef(128);
 
   const playlistRef = useRef<File[]>([]);
   const trackIndexRef = useRef(-1);
@@ -60,6 +61,9 @@ function App() {
   const [trackIndex, setTrackIndex] = useState(-1);
   const [playlistSize, setPlaylistSize] = useState(0);
   const [playlistNames, setPlaylistNames] = useState<string[]>([]);
+  const [nMelsValue, setNMelsValue] = useState(128);
+  const [nMelsInput, setNMelsInput] = useState("128");
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const setSelectedFileName = usePlayerStore((s) => s.setSelectedFileName);
   const setReady = usePlayerStore((s) => s.setReady);
@@ -91,6 +95,10 @@ function App() {
   }, [currentTime, duration]);
 
   useEffect(() => {
+    nMelsRef.current = nMelsValue;
+  }, [nMelsValue]);
+
+  useEffect(() => {
     const el = folderInputRef.current;
     if (!el) {
       return;
@@ -114,7 +122,9 @@ function App() {
       }
 
       const size = painter.getSuggestedImageSize();
-      const image = await buildStaticSpectrogram(buffer, size.width, size.height);
+      const image = await buildStaticSpectrogram(buffer, size.width, size.height, {
+        nMels: nMelsRef.current
+      });
 
       if (token !== analysisTokenRef.current) {
         return;
@@ -256,6 +266,22 @@ function App() {
     };
   }, [renderSpectrogramForCurrentTrack, setCurrentTime, setDuration, setFps, setPlaying, setStatusMessage]);
 
+  useEffect(() => {
+    if (!isReady || trackIndex < 0) {
+      return;
+    }
+
+    const id = setTimeout(() => {
+      const token = ++analysisTokenRef.current;
+      setStatusMessage("Rebuilding spectrogram with updated mel bands...");
+      void renderSpectrogramForCurrentTrack(token).then(() => {
+        setStatusMessage(`Loaded ${trackIndex + 1}/${playlistSize}.`);
+      });
+    }, 180);
+
+    return () => clearTimeout(id);
+  }, [isReady, nMelsValue, playlistSize, renderSpectrogramForCurrentTrack, setStatusMessage, trackIndex]);
+
   const onSelectFolder = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) {
@@ -280,6 +306,27 @@ function App() {
     audioEngine.stop(true);
     spectrogramRef.current?.clear();
     setStatusMessage(`Folder indexed: ${list.length} OGG files. Select one in Files to load.`);
+  };
+
+  const onDropFiles = (files: FileList) => {
+    const list = collectAudioFiles(files);
+    if (list.length === 0) {
+      setStatusMessage("No OGG files found in dropped content.");
+      return;
+    }
+
+    playlistRef.current = list;
+    setPlaylistNames(list.map((file) => file.name));
+    setPlaylistSize(list.length);
+    setTrackIndex(-1);
+    setSelectedFileName("");
+    setReady(false);
+    setPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+    audioEngine.stop(true);
+    spectrogramRef.current?.clear();
+    setStatusMessage(`Dropped ${list.length} OGG files. Select one in Files to load.`);
   };
 
   const onPlayPause = async () => {
@@ -334,6 +381,51 @@ function App() {
     setVolume(nextVolume);
   };
 
+  const applyNMelsInput = () => {
+    const trimmed = nMelsInput.trim();
+    const next = Number(trimmed);
+    if (trimmed.length > 0 && Number.isFinite(next) && next > 0) {
+      const normalized = Math.max(1, Math.round(next));
+      setNMelsValue(normalized);
+      setNMelsInput(String(normalized));
+    } else {
+      setStatusMessage("n_mels must be a positive number.");
+    }
+  };
+
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      const isEditable =
+        tag === "input" || tag === "textarea" || tag === "select" || Boolean(target?.isContentEditable);
+
+      if (isEditable) {
+        return;
+      }
+
+      if (event.code === "ArrowLeft") {
+        event.preventDefault();
+        void onPrev();
+        return;
+      }
+
+      if (event.code === "ArrowRight") {
+        event.preventDefault();
+        void onNext();
+        return;
+      }
+
+      if (event.code === "Space") {
+        event.preventDefault();
+        void onPlayPause();
+      }
+    };
+
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onNext, onPlayPause, onPrev]);
+
   const seekByClientX = (clientX: number) => {
     if (!isReady || duration <= 0) {
       return;
@@ -354,7 +446,26 @@ function App() {
   const ticks = buildAxisTicks(duration, 7);
 
   return (
-    <main className="app-shell">
+    <main
+      className={`app-shell${isDragOver ? " drag-over" : ""}`}
+      onDragOver={(event) => {
+        event.preventDefault();
+        setIsDragOver(true);
+      }}
+      onDragLeave={(event) => {
+        event.preventDefault();
+        if (event.currentTarget === event.target) {
+          setIsDragOver(false);
+        }
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        setIsDragOver(false);
+        if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
+          onDropFiles(event.dataTransfer.files);
+        }
+      }}
+    >
       <section className="panel">
         <header className="header">
           <div className="chip">{isPlaying ? "Playing" : "Paused"}</div>
@@ -400,6 +511,26 @@ function App() {
           <span>Volume</span>
           <input type="range" min={0} max={1} step={0.01} value={volume} onChange={onVolume} />
           <span>{Math.round(volume * 100)}%</span>
+        </div>
+
+        <div className="timeline volume-row">
+          <span>n_mels</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={nMelsInput}
+            onChange={(event) => {
+              setNMelsInput(event.target.value);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                applyNMelsInput();
+              }
+            }}
+          />
+          <button type="button" onClick={applyNMelsInput}>
+            Apply
+          </button>
         </div>
 
         <p className="meta">{selectedFileName || "No file selected"}</p>

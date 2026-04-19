@@ -6,6 +6,14 @@ function lerp(a: number, b: number, t: number) {
   return a + (b - a) * t;
 }
 
+function hzToMel(hz: number) {
+  return 2595 * Math.log10(1 + hz / 700);
+}
+
+function melToHz(mel: number) {
+  return 700 * (Math.pow(10, mel / 2595) - 1);
+}
+
 function normalizedColor(value: number) {
   const v = clamp(value, -1, 1);
   const stops = [
@@ -95,7 +103,10 @@ function fftInPlace(re: Float32Array, im: Float32Array) {
 export async function buildStaticSpectrogram(
   buffer: AudioBuffer,
   targetWidth: number,
-  targetHeight: number
+  targetHeight: number,
+  options?: {
+    nMels?: number;
+  }
 ) {
   const fftSize = 1024;
   const hopSize = 256;
@@ -108,6 +119,10 @@ export async function buildStaticSpectrogram(
   const height = Math.max(160, Math.min(targetHeight, bins));
 
   const dbMap = new Float32Array(width * height);
+  const nMels = Math.round(clamp(options?.nMels ?? 128, 1, 4096));
+  const sampleRate = buffer.sampleRate;
+  const nyquist = sampleRate / 2;
+  const melMax = hzToMel(nyquist);
 
   const frame = new Float32Array(fftSize);
   const window = new Float32Array(fftSize);
@@ -118,6 +133,14 @@ export async function buildStaticSpectrogram(
   const re = new Float32Array(fftSize);
   const im = new Float32Array(fftSize);
   const mags = new Float32Array(bins);
+  const melBandMags = new Float32Array(nMels);
+  const melBandBins = new Float32Array(nMels);
+
+  for (let i = 0; i < nMels; i += 1) {
+    const melPos = (i / Math.max(1, nMels - 1)) * melMax;
+    const hz = melToHz(melPos);
+    melBandBins[i] = clamp((hz / nyquist) * (bins - 1), 0, bins - 1);
+  }
 
   let maxDb = Number.NEGATIVE_INFINITY;
 
@@ -139,15 +162,21 @@ export async function buildStaticSpectrogram(
       mags[i] = Math.sqrt(power) + 1e-8;
     }
 
-    for (let y = 0; y < height; y += 1) {
-      const yn = y / Math.max(1, height - 1);
-      const curved = Math.pow(1 - yn, 2.2);
-      const binF = curved * (bins - 1);
+    for (let i = 0; i < nMels; i += 1) {
+      const binF = melBandBins[i];
       const lo = Math.floor(binF);
       const hi = Math.min(bins - 1, lo + 1);
       const frac = binF - lo;
+      melBandMags[i] = lerp(mags[lo], mags[hi], frac);
+    }
 
-      const mag = lerp(mags[lo], mags[hi], frac);
+    for (let y = 0; y < height; y += 1) {
+      const yn = y / Math.max(1, height - 1);
+      const melPos = (1 - yn) * (nMels - 1);
+      const lo = Math.floor(melPos);
+      const hi = Math.min(nMels - 1, lo + 1);
+      const frac = melPos - lo;
+      const mag = lerp(melBandMags[lo], melBandMags[hi], frac);
       const db = 20 * Math.log10(mag);
 
       dbMap[y * width + x] = db;

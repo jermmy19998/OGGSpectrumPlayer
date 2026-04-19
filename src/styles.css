@@ -39,6 +39,12 @@ body {
   padding: 20px;
   display: grid;
   place-items: center;
+  transition: filter 120ms ease;
+}
+
+.app-shell.drag-over .panel {
+  border-color: #4acfff;
+  box-shadow: 0 0 0 2px #4acfff55, 0 14px 40px #00000066;
 }
 
 .panel {
@@ -137,6 +143,15 @@ button:disabled {
 .timeline input[type="range"] {
   width: 100%;
   accent-color: #2ee3bc;
+}
+
+.timeline input[type="number"] {
+  width: 100%;
+  background: #0f2038;
+  border: 1px solid #25405f;
+  color: #dce9ff;
+  border-radius: 8px;
+  padding: 6px 8px;
 }
 
 .volume-row {
