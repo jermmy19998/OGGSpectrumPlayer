@@ -357,10 +357,6 @@ function App() {
     <main className="app-shell">
       <section className="panel">
         <header className="header">
-          <div>
-            <h1>OGG Spectrum Player</h1>
-            <p className="subtitle">Static Spectrogram + Draggable Playhead</p>
-          </div>
           <div className="chip">{isPlaying ? "Playing" : "Paused"}</div>
         </header>
 
@@ -384,7 +380,6 @@ function App() {
           <button type="button" onClick={onNext} disabled={trackIndex < 0 || trackIndex >= playlistSize - 1}>
             Next
           </button>
-          <span className="chip">FPS {fps}</span>
         </div>
 
         <div className="timeline">

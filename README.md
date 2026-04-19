@@ -114,6 +114,10 @@ npm run build
 npx electron-builder --win --x64
 ```
 
+Installer behavior:
+- Creates Desktop shortcut automatically
+- Creates Start Menu shortcut automatically
+
 ### Notes
 - Node 20 LTS is recommended.
 - Large tracks may take extra time during spectrogram analysis.
@@ -233,6 +237,10 @@ npm run electron
 npm run build
 npx electron-builder --win --x64
 ```
+
+安装包行为：
+- 自动创建桌面快捷方式
+- 自动创建开始菜单快捷方式
 
 ### 说明
 - 建议使用 Node 20 LTS。
