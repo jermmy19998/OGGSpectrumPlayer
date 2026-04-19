@@ -269,7 +269,7 @@ function App() {
     }
 
     playlistRef.current = list;
-    setPlaylistNames(list.map((file) => getRelativeName(file)));
+    setPlaylistNames(list.map((file) => file.name));
     setPlaylistSize(list.length);
     setTrackIndex(-1);
     setSelectedFileName("");
